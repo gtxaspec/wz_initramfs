@@ -1,0 +1,123 @@
+#!/bin/sh
+
+exec 1> /tmp/wz_mini_initramfs.log 2>&1
+
+set -x
+
+echo "welcome to wz_mini initramfs"
+
+# devtmpfs does not get automounted for initramfs
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+#Required delay on T20/T31
+sleep 1
+
+echo "Check for T20 platform"
+
+if [ -b /dev/mtdblock10 ]; then
+
+	echo "Found T20"
+
+	#T20: Need to export the sd card enable gpio manually
+	echo 43 > /sys/class/gpio/export
+	echo in > /sys/class/gpio/gpio43/direction
+
+	#T20: Insert required delay for sd card init
+	sleep 3
+
+else
+	echo "Not T20"
+fi
+
+if ! [ -d /sys/class/gpio/gpio38 ]; then
+	echo 38 > /sys/class/gpio/export
+	echo out > /sys/class/gpio/gpio38/direction
+	echo 1 > /sys/class/gpio/gpio38/value
+fi
+
+if ! [ -d /sys/class/gpio/gpio39 ]; then
+	echo 39 > /sys/class/gpio/export
+	echo out > /sys/class/gpio/gpio39/direction
+	echo 1 > /sys/class/gpio/gpio39/value
+fi
+
+mkdir -p /sdcard
+mount -t vfat /dev/mmcblk0p1 /sdcard -o rw,umask=0000,dmask=0000
+
+if [ -f /sdcard/wz_mini/wz_mini.conf ]; then
+        source /sdcard/wz_mini/wz_mini.conf
+fi
+
+
+initram_init() {
+
+mkdir /wz
+mount -t squashfs /dev/mtdblock2 /wz
+
+if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
+	/led.sh &
+	led_pid="$!"
+	cp /sdcard/wz_mini/bin/fsck.vfat /tmp/fsck.vfat
+	umount /sdcard
+	/tmp/fsck.vfat -a -v /dev/mmcblk0p1
+	rm -f /tmp/fsck.vfat
+	sync
+	mount -t vfat /dev/mmcblk0p1 /sdcard -o rw,umask=0000,dmask=0000
+	kill $led_pid
+	echo 1 > /sys/class/gpio/gpio39/value
+	echo 0 > /sys/class/gpio/gpio38/value
+fi
+
+if [ ! -f /sdcard/wz_mini/etc/init.d/wz_init.sh ]; then
+
+	echo "wz_mini not found, booting stock"
+
+	mount --move /dev /wz/dev
+	mount --move /sys /wz/sys
+	mount --move /proc /wz/proc
+
+	cp /tmp/wz_mini_initramfs.log /sdcard/wz_mini_initramfs.log
+
+	umount /sdcard
+
+	exec busybox switch_root /wz /linuxrc
+
+else
+
+	echo "Loading wz_mini..."
+
+	mkdir -p /wz/dev
+	mkdir -p /wz/sys
+
+
+	mount --move /dev /wz/dev
+	mount --move /sys /wz/sys
+	mount --move /proc /wz/proc
+
+	#mkdir -p /wz/media/mmc
+	mount --move /sdcard /wz/opt
+
+	cp /tmp/wz_mini_initramfs.log /wz/opt/wz_mini_initramfs.log
+
+	#exec busybox switch_root /wz /linuxrc
+	exec busybox switch_root /wz /opt/wz_mini/etc/init.d/wz_init.sh
+
+fi
+
+}
+
+if [ -f /sdcard/wz_mini/wz_mini.conf ]; then
+
+	source /sdcard/wz_mini/wz_mini.conf
+
+	if [[ "$DEBUG_INITRAMFS_ENABLED" == "true" ]]; then
+		exec /bin/sh
+	else
+		echo "initramfs debug disabled"
+		initram_init
+	fi
+else
+		initram_init
+fi
