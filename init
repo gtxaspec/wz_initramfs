@@ -104,6 +104,12 @@ if [ -b /dev/mtdblock10 ]; then
 	}
 
 	restart_device() {
+		sync
+		cp /tmp/wz_mini_u_boot_initramfs.log /sdcard/wz_mini_u_boot_initramfs.log
+		sync
+		cd /
+		umount /sdcard
+		sleep 1
 		exec busybox switch_root / /tmp/null
 	}
 
