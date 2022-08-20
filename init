@@ -51,6 +51,15 @@ if [ -b /dev/mtdblock10 ]; then
 
 	MTD0_ORIG=$(/bin/busybox md5sum /tmp/mtd0_orig.bin)
 
+	check_u_boot_checksum() {
+		if [[ "$(/bin/busybox md5sum /tmp/mtd0_v2_latest.bin)" == *"9a4dc35e081645f0b87baf7f8636ef8d"* ]]; then
+			echo "uboot extracked OK!"
+			check_u_boot_pre_flash
+		else
+			echo "uboot failed checksum, reboot"
+			restart_device
+		fi
+	}
 
 	check_u_boot_pre_flash() {
 		if [[ "$(/bin/busybox md5sum /dev/mtd0)" == *"9a4dc35e081645f0b87baf7f8636ef8d"* ]]; then
@@ -113,8 +122,7 @@ if [ -b /dev/mtdblock10 ]; then
 		exec busybox switch_root / /tmp/null
 	}
 
-	check_u_boot_pre_flash
-
+	check_u_boot_checksum
 else
 	echo "Not T20"
 	exec busybox switch_root / /tmp/null
