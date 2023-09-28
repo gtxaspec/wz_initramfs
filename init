@@ -1,17 +1,24 @@
 #!/bin/sh
+## wz_mini initramfs init
 
 exec 1> /tmp/wz_mini_initramfs.log 2>&1
 
 set -x
 
-echo "welcome to wz_mini initramfs"
+echo "Welcome to wz_mini initramfs"
+WZMINI_CONFIG_FILE=/sdcard/wz_mini/wz_mini.conf
+WZMINI_INIT_FILE=/sdcard/wz_mini/etc/init.d/wz_init.sh
+WZMINI_INIT_FILE_NEWROOT=/opt/wz_mini/etc/init.d/wz_init.sh
+WZMINI_OVERLAY_FILE=/sdcard/wz_mini-overlay.img
+WZMINI_KERNEL_PATH=/sdcard/wz_mini/lib/modules/3.10.14__isvp_swan_1.0__
+
 
 # devtmpfs does not get automounted for initramfs
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 
-#Required delay on T20/T31
+# Required delay on T20/T31
 sleep 1
 
 echo "Check for T20 platform"
@@ -20,11 +27,11 @@ if [ -b /dev/mtdblock10 ]; then
 
 	echo "Found T20"
 
-	#T20: Need to export the sd card enable gpio manually
+	# T20: Need to export the sd card enable gpio manually
 	echo 43 > /sys/class/gpio/export
 	echo in > /sys/class/gpio/gpio43/direction
 
-	#T20: Insert required delay for sd card init
+	# T20: Insert required delay for sd card init
 	sleep 3
 
 else
@@ -44,17 +51,10 @@ if ! [ -d /sys/class/gpio/gpio39 ]; then
 fi
 
 mkdir -p /sdcard
+mkdir /stock_rootfs
+mkdir /newroot
+mount -t squashfs /dev/mtdblock2 /stock_rootfs
 mount -t vfat /dev/mmcblk0p1 /sdcard -o rw,umask=0000,dmask=0000
-
-if [ -f /sdcard/wz_mini/wz_mini.conf ]; then
-        source /sdcard/wz_mini/wz_mini.conf
-fi
-
-
-initram_init() {
-
-mkdir /wz
-mount -t squashfs /dev/mtdblock2 /wz
 
 if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
 	/led.sh &
@@ -70,54 +70,86 @@ if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
 	echo 0 > /sys/class/gpio/gpio38/value
 fi
 
-if [ ! -f /sdcard/wz_mini/etc/init.d/wz_init.sh ]; then
-
-	echo "wz_mini not found, booting stock"
-
-	mount --move /dev /wz/dev
-	mount --move /sys /wz/sys
-	mount --move /proc /wz/proc
-
-	cp /tmp/wz_mini_initramfs.log /sdcard/wz_mini_initramfs.log
-
-	umount /sdcard
-
-	exec busybox switch_root /wz /linuxrc
-
-else
-
-	echo "Loading wz_mini..."
-
-	mkdir -p /wz/dev
-	mkdir -p /wz/sys
-
-
-	mount --move /dev /wz/dev
-	mount --move /sys /wz/sys
-	mount --move /proc /wz/proc
-
-	#mkdir -p /wz/media/mmc
-	mount --move /sdcard /wz/opt
-
-	cp /tmp/wz_mini_initramfs.log /wz/opt/wz_mini_initramfs.log
-
-	#exec busybox switch_root /wz /linuxrc
-	exec busybox switch_root /wz /opt/wz_mini/etc/init.d/wz_init.sh
-
-fi
-
+move_virtual_filesystems() { # Move virtual file systems to new root
+	echo "Moving /dev,/sys,/proc to /newroot"
+	mount --move /dev /newroot/dev
+	mount --move /sys /newroot/sys
+	mount --move /proc /newroot/proc
 }
 
-if [ -f /sdcard/wz_mini/wz_mini.conf ]; then
+boot_stock() {
+	mount --move /stock_rootfs /newroot
+	move_virtual_filesystems
+	echo "Switching to /newroot with stock init"
+	exec busybox switch_root /newroot /linuxrc
+}
 
-	source /sdcard/wz_mini/wz_mini.conf
-
-	if [[ "$DEBUG_INITRAMFS_ENABLED" == "true" ]]; then
-		exec /bin/sh
-	else
-		echo "initramfs debug disabled"
-		initram_init
-	fi
+boot_wz_mini() {
+if ! [ -f $WZMINI_INIT_FILE ]; then
+	echo "Booting with stock firmware because $WZMINI_INIT_FILE is missing"
+	boot_stock
 else
-		initram_init
+	mount --move /stock_rootfs /newroot
+	mount --move /sdcard /newroot/opt
+	move_virtual_filesystems
+	echo "Switching to /newroot with wz_mini init"
+	cp /tmp/wz_mini_initramfs.log /newroot/opt/wz_mini_initramfs.log
+	exec busybox switch_root /newroot $WZMINI_INIT_FILE_NEWROOT
+fi
+}
+
+boot_wz_mini_overlay() {
+if ! grep -q "overlayfs" /proc/filesystems; then
+	boot_stock
+else
+	/sdcard/wz_mini/bin/busybox insmod $WZMINI_KERNEL_PATH/kernel/fs/jbd2/jbd2.ko
+	/sdcard/wz_mini/bin/busybox insmod $WZMINI_KERNEL_PATH/kernel/fs/mbcache.ko
+	/sdcard/wz_mini/bin/busybox insmod $WZMINI_KERNEL_PATH/kernel/fs/ext4/ext4.ko
+
+	mkdir /wz_mini-overlay
+	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /wz_mini-overlay
+
+	mount -t overlayfs overlayfs -o lowerdir=/stock_rootfs,upperdir=/wz_mini-overlay /newroot
+
+	mkdir -p /newroot/stock_rootfs
+	mkdir -p /newroot/wz_mini-overlay
+
+	move_virtual_filesystems
+	mount --move /sdcard /newroot/opt
+	mount --move /stock_rootfs /newroot/stock_rootfs
+	mount --move /wz_mini-overlay /newroot/wz_mini-overlay
+	
+	echo "Switching to /newroot with wz_mini init and overlayfs"
+	cp /tmp/wz_mini_initramfs.log /newroot/opt/wz_mini_initramfs.log
+	exec busybox switch_root /newroot $WZMINI_INIT_FILE_NEWROOT
+fi
+}
+
+
+# Boot with stock init if wz_mini.conf is missing
+if ! [ -f $WZMINI_CONFIG_FILE ]; then
+	echo "$WZMINI_CONFIG_FILE is missing, falling back to stock init"
+	boot_stock
+else
+	echo "$WZMINI_CONFIG_FILE is found"
+	source $WZMINI_CONFIG_FILE
+	if [[ "$DEBUG_INITRAMFS_ENABLED" == "true" ]]; then
+		echo "Starting initramfs debug mode"
+		exec /bin/sh
+	fi
+fi
+
+# Boot with overlay image if the option is used
+if [[ "$ENABLE_OVERLAY" == "true" ]]; then
+	echo "ENABLE_OVERLAY option is true"
+	if [ -f $WZMINI_OVERLAY_FILE ]; then
+		echo "$WZMINI_OVERLAY_FILE is found"
+		boot_wz_mini_overlay
+	else
+		echo "$WZMINI_OVERLAY_FILE is missing, fallling back to wz_mini without overlayfs"
+		boot_wz_mini
+	fi	
+else
+	echo "ENABLE_OVERLAY option is false"
+	boot_wz_mini
 fi
