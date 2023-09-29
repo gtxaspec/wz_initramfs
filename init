@@ -57,7 +57,6 @@ mount -t squashfs /dev/mtdblock2 /stock_rootfs
 mount -t vfat /dev/mmcblk0p1 /sdcard -o rw,umask=0000,dmask=0000
 
 fsck_sdcard() {
-if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
 	echo "Running fsck on SD Card"
 	/led.sh &
 	led_pid="$!"
@@ -70,7 +69,6 @@ if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
 	kill $led_pid
 	echo 1 > /sys/class/gpio/gpio39/value
 	echo 0 > /sys/class/gpio/gpio38/value
-fi
 }
 
 move_virtual_filesystems() { # Move virtual file systems to new root
@@ -142,7 +140,11 @@ if ! [ -f $WZMINI_CONFIG_FILE ]; then
 else
 	echo "$WZMINI_CONFIG_FILE is found"
 	source $WZMINI_CONFIG_FILE
-	fsck_sdcard
+	
+	if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
+		fsck_sdcard
+	fi
+	
 	if [[ "$DEBUG_INITRAMFS_ENABLED" == "true" ]]; then
 		echo "Starting initramfs debug mode"
 		exec /bin/sh
