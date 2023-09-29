@@ -125,12 +125,14 @@ else
 
 	mount --move /stock_rootfs /newroot/stock_rootfs
 	mount --move /wz_mini-overlay /newroot/wz_mini-overlay
-
-	mkdir -p /newroot/stock_system
-	mkdir -p /newroot/wz_mini-overlay/system_overlay
-	mount -t squashfs /dev/mtdblock3 /newroot/stock_system
-	mount -t overlayfs overlayfs -o lowerdir=/newroot/stock_system,upperdir=/newroot/wz_mini-overlay/system_overlay /newroot/system
-
+	
+	if [[ "$MOUNT_SYSTEM_PARTITION_AS_OVERLAY" == "true" ]]; then
+		mkdir -p /newroot/stock_system
+		mkdir -p /newroot/wz_mini-overlay/system_overlay
+		mount -t squashfs /dev/mtdblock3 /newroot/stock_system
+		mount -t overlayfs overlayfs -o lowerdir=/newroot/stock_system,upperdir=/newroot/wz_mini-overlay/system_overlay /newroot/system
+	fi
+	
 	move_virtual_filesystems
 	
 	echo "Switching to /newroot with wz_mini init and overlayfs"
