@@ -126,7 +126,7 @@ else
 	mount --move /stock_rootfs /newroot/stock_rootfs
 	mount --move /wz_mini-overlay /newroot/wz_mini-overlay
 	
-	if [[ "$MOUNT_SYSTEM_PARTITION_AS_OVERLAY" == "true" ]]; then
+	if [[ "$ENABLE_OVERLAY_FOR_SYSTEM_PARTITION" == "true" ]]; then
 		mkdir -p /newroot/stock_system
 		mkdir -p /newroot/wz_mini-overlay/system_overlay
 		mount -t squashfs /dev/mtdblock3 /newroot/stock_system
