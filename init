@@ -116,9 +116,15 @@ else
 
 	mkdir -p /newroot/stock_rootfs
 	mkdir -p /newroot/wz_mini-overlay
+	mkdir -p /newroot/sdcard
+	mkdir -p /newroot/opt/wz_mini
+	mkdir -p /opt/wz_mini
 
 	move_virtual_filesystems
-	mount --move /sdcard /newroot/opt
+	mount --bind /sdcard/wz_mini /opt/wz_mini
+	mount --move /opt/wz_mini /newroot/opt/wz_mini
+	mount --move /sdcard /newroot/sdcard
+
 	mount --move /stock_rootfs /newroot/stock_rootfs
 	mount --move /wz_mini-overlay /newroot/wz_mini-overlay
 	
