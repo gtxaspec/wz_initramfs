@@ -142,7 +142,7 @@ else
 	move_virtual_filesystems
 
 	echo "Switching to /newroot with wz_mini init and overlayfs"
-	cp /tmp/wz_mini_initramfs.log /newroot/opt/wz_mini_initramfs.log
+	cp /tmp/wz_mini_initramfs.log /newroot/sdcard/wz_mini_initramfs.log
 	exec busybox switch_root /newroot $WZMINI_INIT_FILE_NEWROOT
 fi
 }
