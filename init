@@ -177,6 +177,6 @@ if [[ "$ENABLE_OVERLAY_FOR_ROOTFS" == "true" ]]; then
 		boot_wz_mini
 	fi	
 else
-	echo "ENABLE_OVERLAY_ROR_ROOTFS option is false"
+	echo "ENABLE_OVERLAY_FOR_ROOTFS option is false"
 	boot_wz_mini
 fi
