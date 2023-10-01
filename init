@@ -82,7 +82,7 @@ move_virtual_filesystems() { # Move virtual file systems to new root
 boot_stock() {
 	mount --move /stock_rootfs /newroot
 	move_virtual_filesystems
-	echo "Switching to /newroot with stock init"
+	echo "Switching root to /newroot with stock init"
 	cp /tmp/wz_mini_initramfs.log /newroot/opt/wz_mini_initramfs.log
 	exec busybox switch_root /newroot /linuxrc
 }
@@ -95,7 +95,7 @@ else
 	mount --move /stock_rootfs /newroot
 	mount --move /sdcard /newroot/opt
 	move_virtual_filesystems
-	echo "Switching to /newroot with wz_mini init"
+	echo "Switching root to /newroot with wz_mini init"
 	cp /tmp/wz_mini_initramfs.log /newroot/opt/wz_mini_initramfs.log
 	exec busybox switch_root /newroot $WZMINI_INIT_FILE_NEWROOT
 fi
@@ -144,7 +144,7 @@ else
 
 	move_virtual_filesystems
 
-	echo "Switching to /newroot with wz_mini init and overlayfs"
+	echo "Switching root to /newroot with wz_mini init on overlay rootfs"
 	cp /tmp/wz_mini_initramfs.log /newroot/sdcard/wz_mini_initramfs.log
 	exec busybox switch_root /newroot $WZMINI_INIT_FILE_NEWROOT
 fi
