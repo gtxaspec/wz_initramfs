@@ -103,7 +103,7 @@ fi
 
 boot_wz_mini_overlay() {
 if ! grep -q "overlayfs" /proc/filesystems; then
-	echo "overlayfs supprort is missing from this kernel, falling back to wz_mini firmware"
+	echo "overlayfs support is missing from this kernel, falling back to wz_mini firmware"
 	boot_wz_mini
 else
 	echo "Mounting rootfs as overlay"
