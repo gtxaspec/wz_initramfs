@@ -110,13 +110,13 @@ else
 	/sdcard/wz_mini/bin/busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/mbcache.ko
 	/sdcard/wz_mini/bin/busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/ext4/ext4.ko
 
-	mkdir /wz_mini-overlay
-	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /wz_mini-overlay
+	mkdir /overlay
+	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /overlay
 
-	mount -t overlayfs overlayfs -o lowerdir=/stock_rootfs,upperdir=/wz_mini-overlay /newroot
+	mount -t overlayfs overlayfs -o lowerdir=/stock_rootfs,upperdir=/overlay /newroot
 
-	mkdir -p /newroot/wz_mini-overlay_mnt # Put all required mountpoint directories here to tidy up /
-	mkdir -p /newroot/wz_mini-overlay
+	mkdir -p /newroot/overlay_mnt # Put all required mountpoint directories here to tidy up /
+	mkdir -p /newroot/overlay
 	mkdir -p /newroot/sdcard
 	mkdir -p /newroot/opt/wz_mini
 	mkdir -p /opt/wz_mini
@@ -125,18 +125,18 @@ else
 	mount --move /opt/wz_mini /newroot/opt/wz_mini
 	mount --move /sdcard /newroot/sdcard
 
-	mkdir -p /newroot/wz_mini-overlay_mnt
-	mkdir -p /newroot/wz_mini-overlay_mnt/stock_rootfs
-	mount --move /stock_rootfs /newroot/wz_mini-overlay_mnt/stock_rootfs
-	mount --move /wz_mini-overlay /newroot/wz_mini-overlay
+	mkdir -p /newroot/overlay_mnt
+	mkdir -p /newroot/overlay_mnt/stock_rootfs
+	mount --move /stock_rootfs /newroot/overlay_mnt/stock_rootfs
+	mount --move /overlay /newroot/overlay
 
 	if [[ "$ENABLE_OVERLAY_FOR_SYSTEM_PARTITION" == "true" ]]; then
 		echo "ENABLE_OVERLAY_FOR_SYSTEM_PARTITION is true"
 		echo "Mounting /system as overlay"
-		mkdir -p /newroot/wz_mini-overlay_mnt/stock_system
-		mkdir -p /newroot/wz_mini-overlay_mnt/system_overlay
-		mount -t squashfs /dev/mtdblock3 /newroot/wz_mini-overlay_mnt/stock_system
-		mount -t overlayfs overlayfs -o lowerdir=/newroot/wz_mini-overlay_mnt/stock_system,upperdir=/newroot/wz_mini-overlay_mnt/system_overlay /newroot/system
+		mkdir -p /newroot/overlay_mnt/stock_system
+		mkdir -p /newroot/overlay_mnt/system_overlay
+		mount -t squashfs /dev/mtdblock3 /newroot/overlay_mnt/stock_system
+		mount -t overlayfs overlayfs -o lowerdir=/newroot/overlay_mnt/stock_system,upperdir=/newroot/overlay_mnt/system_overlay /newroot/system
 	fi
 
 	move_virtual_filesystems
