@@ -112,7 +112,7 @@ else
 	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/ext4/ext4.ko
 
 	mkdir /overlay
-	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /overlay || { echo "Failed to mount $WZMINI_OVERLAY_FILE, falling back to wz_mini without overlay" ; boot_wz_mini ; }
+	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /overlay || { echo "Failed to mount $WZMINI_OVERLAY_FILE, falling back to wz_mini without overlay image" ; boot_wz_mini ; }
 
 	mount -t overlayfs overlayfs -o lowerdir=/stock_rootfs,upperdir=/overlay /newroot
 
@@ -186,10 +186,10 @@ if [[ "$ENABLE_OVERLAY_FOR_ROOTFS" == "true" ]]; then
 		# Create overlay image from compressed empty overlay image 
 		if [[ -f $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE ]]; then
 			echo "Decompressing $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE"
-			/sdcard/wz_mini/bin/busybox gzip -d -k -c $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE > $WZMINI_OVERLAY_FILE || { echo "Failed to extract $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE, falling back to wz_mini without overlay" ; boot_wz_mini ; }
+			/sdcard/wz_mini/bin/busybox gzip -d -k -c $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE > $WZMINI_OVERLAY_FILE || { echo "Failed to extract $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE, falling back to wz_mini without overlay image" ; boot_wz_mini ; }
 			boot_wz_mini_overlay
 		else
-			echo "$WZMINI_OVERLAY_COMPRESSED_FILE is missing, falling back to wz_mini without overlay"
+			echo "$WZMINI_OVERLAY_COMPRESSED_FILE is missing, falling back to wz_mini without overlay image"
 			boot_wz_mini
 		fi
 	fi	
