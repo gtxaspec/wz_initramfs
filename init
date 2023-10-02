@@ -88,31 +88,41 @@ boot_stock() {
 }
 
 boot_wz_mini() {
-if ! [ -f $WZMINI_INIT_FILE ]; then
-	echo "$WZMINI_INIT_FILE is missing, falling back to stock firmware"
-	boot_stock
-else
-	mount --move /stock_rootfs /newroot
-	mount --move /sdcard /newroot/opt
 	move_virtual_filesystems
 	echo "Switching root to /newroot with wz_mini init"
 	cp /tmp/wz_mini_initramfs.log /newroot/opt/wz_mini_initramfs.log
 	exec busybox switch_root /newroot $WZMINI_INIT_FILE_NEWROOT
-fi
 }
 
-boot_wz_mini_overlay() {
-if ! grep -q "overlayfs" /proc/filesystems; then
-	echo "overlayfs support is missing from this kernel, falling back to wz_mini"
-	boot_wz_mini
-else
+mount_wz_mini() {
+	mount --move /stock_rootfs /newroot
+	mount --move /sdcard /newroot/opt
+}
+
+mount_overlay_rootfs() { # Mount rootfs as overlay
+	if ! grep -q "overlayfs" /proc/filesystems; then
+		echo "overlayfs support is missing from this kernel"
+		return 1
+	fi
+
+	if ! [ -f $WZMINI_OVERLAY_FILE ]; then
+		echo "$WZMINI_OVERLAY_FILE is missing"
+		# Create overlay image from compressed empty overlay image file
+		if [[ -f $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE ]]; then
+		echo "Decompressing $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE"
+			/sdcard/wz_mini/bin/busybox gzip -d -k -c $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE > $WZMINI_OVERLAY_FILE || { echo "Failed to decompress $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE" ; return 1 ; }
+		else
+			{ echo "$WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE is missing" ; return 1 ; }
+		fi
+	fi
+
 	echo "Mounting rootfs as overlay"
 	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/jbd2/jbd2.ko
 	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/mbcache.ko
 	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/ext4/ext4.ko
 
 	mkdir /overlay
-	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /overlay || { echo "Failed to mount $WZMINI_OVERLAY_FILE, falling back to wz_mini without overlay image" ; boot_wz_mini ; }
+	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /overlay || { echo "Failed to mount $WZMINI_OVERLAY_FILE" ; return 1 ; }
 
 	mount -t overlayfs overlayfs -o lowerdir=/stock_rootfs,upperdir=/overlay /newroot
 
@@ -130,33 +140,22 @@ else
 	mkdir -p /newroot/overlay_mnt/stock_rootfs
 	mount --move /stock_rootfs /newroot/overlay_mnt/stock_rootfs
 	mount --move /overlay /newroot/overlay
+}
 
-	if [[ "$ENABLE_OVERLAY_FOR_SYSTEM_PARTITION" == "true" ]]; then
-		echo "ENABLE_OVERLAY_FOR_SYSTEM_PARTITION value is true"
-		echo "Mounting /system as overlay"
-		mkdir -p /newroot/overlay_mnt/stock_system
-		mkdir -p /newroot/overlay_mnt/system_overlay
-		mount -t squashfs /dev/mtdblock3 /newroot/overlay_mnt/stock_system
-		mount -t overlayfs overlayfs -o lowerdir=/newroot/overlay_mnt/stock_system,upperdir=/newroot/overlay_mnt/system_overlay /newroot/system
-	else
-		echo "ENABLE_OVERLAY_FOR_SYSTEM_PARTITION value is false"
-	fi
-
-	move_virtual_filesystems
-
-	echo "Switching root to /newroot with wz_mini init on overlay rootfs"
-	cp /tmp/wz_mini_initramfs.log /newroot/sdcard/wz_mini_initramfs.log
-	exec busybox switch_root /newroot $WZMINI_INIT_FILE_NEWROOT
-fi
+mount_overlay_system() { # Mount /system as overlay
+	echo "Mounting /system as overlay"
+	mkdir -p /newroot/overlay_mnt/stock_system
+	mkdir -p /newroot/overlay_mnt/system_overlay
+	mount -t squashfs /dev/mtdblock3 /newroot/overlay_mnt/stock_system
+	mount -t overlayfs overlayfs -o lowerdir=/newroot/overlay_mnt/stock_system,upperdir=/newroot/overlay_mnt/system_overlay /newroot/system
 }
 
 
-# Boot with stock firmware if wz_mini.conf is missing
+##### ERROR CHECKING AND DEBUGGING #####
 if ! [ -f $WZMINI_CONFIG_FILE ]; then
 	echo "$WZMINI_CONFIG_FILE is missing, falling back to stock firmware"
 	boot_stock
 else
-	echo "$WZMINI_CONFIG_FILE is found"
 	source $WZMINI_CONFIG_FILE
 
 	if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
@@ -175,25 +174,29 @@ else
 	fi
 fi
 
-# Boot with overlay image if the option is used
+if ! [ -f $WZMINI_INIT_FILE ]; then
+	echo "$WZMINI_INIT_FILE is missing, falling back to stock firmware"
+	boot_stock
+fi
+
+##### MOUNTING #####
 if [[ "$ENABLE_OVERLAY_FOR_ROOTFS" == "true" ]]; then
 	echo "ENABLE_OVERLAY_FOR_ROOTFS value is true"
-	if [ -f $WZMINI_OVERLAY_FILE ]; then
-		echo "$WZMINI_OVERLAY_FILE is found"
-		boot_wz_mini_overlay
-	else
-		echo "$WZMINI_OVERLAY_FILE is missing"
-		# Create overlay image from compressed empty overlay image 
-		if [[ -f $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE ]]; then
-			echo "Decompressing $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE"
-			/sdcard/wz_mini/bin/busybox gzip -d -k -c $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE > $WZMINI_OVERLAY_FILE || { echo "Failed to extract $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE, falling back to wz_mini without overlay image" ; boot_wz_mini ; }
-			boot_wz_mini_overlay
+	if mount_overlay_rootfs; then
+		if [[ "$ENABLE_OVERLAY_FOR_SYSTEM_PARTITION" == "true" ]]; then # Mount /system as overlay if only mounting rootfs as overlay succeeds
+			echo "ENABLE_OVERLAY_FOR_SYSTEM_PARTITION value is true"
+			mount_overlay_system
 		else
-			echo "$WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE is missing, falling back to wz_mini without overlay image"
-			boot_wz_mini
+			echo "ENABLE_OVERLAY_FOR_SYSTEM_PARTITION value is false"
 		fi
-	fi	
+	else
+		echo "Mounting rootfs as overlay failed, falling back to wz_mini without overlay image"
+		mount_wz_mini
+	fi
 else
 	echo "ENABLE_OVERLAY_FOR_ROOTFS value is false"
-	boot_wz_mini
+	mount_wz_mini
 fi
+
+##### BOOTING #####
+boot_wz_mini
