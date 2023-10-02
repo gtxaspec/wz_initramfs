@@ -183,7 +183,6 @@ else
 fi
 
 
-
 ##### MOUNTING #####
 if [[ "$ENABLE_OVERLAY_FOR_ROOTFS" == "true" ]]; then
 	echo "ENABLE_OVERLAY_FOR_ROOTFS value is true"
@@ -202,6 +201,7 @@ else
 	echo "ENABLE_OVERLAY_FOR_ROOTFS value is false"
 	mount_wz_mini
 fi
+
 
 ##### BOOTING #####
 boot_wz_mini
