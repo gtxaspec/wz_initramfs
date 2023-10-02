@@ -12,7 +12,7 @@ WZMINI_INIT_FILE_NEWROOT=/opt/wz_mini/etc/init.d/wz_init.sh
 WZMINI_OVERLAY_FILE=/sdcard/wz_mini-overlay.img
 WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE=/sdcard/wz_mini/overlay_empty.img.gz
 WZMINI_KERNEL_MODULE_PATH=/sdcard/wz_mini/lib/modules/3.10.14__isvp_swan_1.0__
-STOCK_INITD_RCS=/newroot/etc/init.d/rcS
+
 
 
 # devtmpfs does not get automounted for initramfs
@@ -54,9 +54,9 @@ fi
 
 mkdir /sdcard
 mkdir /sdcard2
-mkdir /stock_rootfs
+mkdir /rom
 mkdir /newroot
-mount -t squashfs /dev/mtdblock2 /stock_rootfs
+mount -t squashfs /dev/mtdblock2 /rom
 mount -t vfat /dev/mmcblk0p1 /sdcard -o rw,umask=0000,dmask=0000
 mount -t vfat /dev/mmcblk0p1 /sdcard2 -o rw,umask=0000,dmask=0000
 cp /sdcard/wz_mini/bin/busybox /tmp/busybox
@@ -84,7 +84,7 @@ move_virtual_filesystems() { # Move virtual file systems to new root
 }
 
 boot_stock() {
-	mount --move /stock_rootfs /newroot
+	mount --move /rom /newroot
 	move_virtual_filesystems
 	echo "Switching root to /newroot with stock init"
 	cp /tmp/wz_mini_initramfs.log /sdcard2/wz_mini_initramfs.log
@@ -101,7 +101,7 @@ boot_wz_mini() {
 }
 
 mount_wz_mini() {
-	mount --move /stock_rootfs /newroot
+	mount --move /rom /newroot
 	mount --move /sdcard /newroot/opt
 }
 
@@ -130,10 +130,8 @@ mount_overlay_rootfs() { # Mount rootfs as overlay
 	mkdir /overlay
 	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /overlay || { echo "Failed to mount $WZMINI_OVERLAY_FILE" ; return 1 ; }
 
-	mount -t overlayfs overlayfs -o lowerdir=/stock_rootfs,upperdir=/overlay /newroot
+	mount -t overlayfs overlayfs -o lowerdir=/rom,upperdir=/overlay /newroot
 
-	mkdir -p /newroot/overlay_mnt # Put all required mountpoint directories here to tidy up /
-	mkdir -p /newroot/overlay
 	mkdir -p /newroot/sdcard
 	mkdir -p /newroot/opt/wz_mini
 	mkdir -p /opt/wz_mini
@@ -142,27 +140,12 @@ mount_overlay_rootfs() { # Mount rootfs as overlay
 	mount --move /opt/wz_mini /newroot/opt/wz_mini
 	mount --move /sdcard /newroot/sdcard
 
-	mkdir -p /newroot/overlay_mnt
-	mkdir -p /newroot/overlay_mnt/stock_rootfs
-	mount --move /stock_rootfs /newroot/overlay_mnt/stock_rootfs
+	mkdir -p /newroot/rom
+	mkdir -p /newroot/overlay
+	mount --move /rom /newroot/rom
 	mount --move /overlay /newroot/overlay
 }
 
-mount_overlay_driver() { # Mount /system as overlay
-	echo "Mounting /system as overlay"
-	mkdir -p /newroot/overlay_mnt/stock_system
-	mkdir -p /newroot/overlay_mnt/system_overlay-upper
-	mount -t squashfs /dev/mtdblock3 /newroot/overlay_mnt/stock_system
-	mount -t overlayfs overlayfs -o lowerdir=/newroot/overlay_mnt/stock_system,upperdir=/newroot/overlay_mnt/system_overlay-upper /newroot/system
-}
-
-mount_overlay_configs() { # Mount /configs as overlay
-	echo "Mounting /configs as overlay"
-	mkdir -p /newroot/overlay_mnt/stock_configs
-	mkdir -p /newroot/overlay_mnt/configs_overlay-upper
-	mount -t jffs2 /dev/mtdblock6 /newroot/overlay_mnt/stock_configs
-	mount -t overlayfs overlayfs -o lowerdir=/newroot/overlay_mnt/stock_configs,upperdir=/newroot/overlay_mnt/configs_overlay-upper /newroot/configs
-}
 
 
 ##### ERROR CHECKING AND DEBUGGING #####
@@ -176,6 +159,7 @@ if ! [ -f $WZMINI_INIT_FILE ]; then
 	boot_stock
 fi
 
+/tmp/busybox dos2unix $WZMINI_CONFIG_FILE
 source $WZMINI_CONFIG_FILE
 
 if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
@@ -196,29 +180,11 @@ fi
 
 
 ##### MOUNTING #####
-if [[ "$ENABLE_OVERLAY_FOR_ROOTFS" == "true" ]]; then
-	echo "ENABLE_OVERLAY_FOR_ROOTFS value is true"
-	if mount_overlay_rootfs; then
-		if [[ "$ENABLE_OVERLAY_FOR_DRIVER_PARTITON" == "true" ]]; then # Mount /system as overlay if only mounting rootfs as overlay succeeds
-			echo "ENABLE_OVERLAY_FOR_DRIVER_PARTITON value is true"
-			mount_overlay_driver
-		else
-			echo "ENABLE_OVERLAY_FOR_DRIVER_PARTITON value is false"
-		fi
-		if [[ "$ENABLE_OVERLAY_FOR_CONFIGS_PARTITION" == "true" ]]; then # Mount /configs as overlay if only mounting rootfs as overlay succeeds
-			echo "ENABLE_OVERLAY_FOR_CONFIGS_PARTITION value is true"
-			/tmp/busybox sed -i 's~mount\ -t\ jffs2\ /dev/mtdblock6\ /configs~#mount\ -t\ jffs2\ /dev/mtdblock6\ /configs~g' $STOCK_INITD_RCS
-			mount_overlay_configs
-		else
-			echo "ENABLE_OVERLAY_FOR_CONFIGS_PARTITION value is false"
-			/tmp/busybox sed -i 's~#mount\ -t\ jffs2\ /dev/mtdblock6\ /configs~mount\ -t\ jffs2\ /dev/mtdblock6\ /configs~g' $STOCK_INITD_RCS
-		fi
-	else
-		echo "Mounting rootfs as overlay failed, falling back to wz_mini without overlay image"
-		mount_wz_mini
-	fi
+if [[ "$ENABLE_OVERLAY_IMAGE" == "true" ]]; then
+	echo "ENABLE_OVERLAY_IMAGE value is true"
+	mount_overlay_rootfs
 else
-	echo "ENABLE_OVERLAY_FOR_ROOTFS value is false"
+	echo "ENABLE_OVERLAY_IMAGE value is false"
 	mount_wz_mini
 fi
 
