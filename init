@@ -86,6 +86,7 @@ boot_stock() {
 	move_virtual_filesystems
 	echo "Switching root to /newroot with stock init"
 	cp /tmp/wz_mini_initramfs.log /sdcard2/wz_mini_initramfs.log
+	umount /sdcard2
 	exec busybox switch_root /newroot /linuxrc
 }
 
@@ -93,6 +94,7 @@ boot_wz_mini() {
 	move_virtual_filesystems
 	echo "Switching root to /newroot with wz_mini init"
 	cp /tmp/wz_mini_initramfs.log /sdcard2/wz_mini_initramfs.log
+	umount /sdcard2
 	exec busybox switch_root /newroot $WZMINI_INIT_FILE_NEWROOT
 }
 
