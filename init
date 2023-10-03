@@ -180,11 +180,11 @@ fi
 
 
 ##### MOUNTING #####
-if [[ "$ENABLE_OVERLAY_IMAGE" == "true" ]]; then
-	echo "ENABLE_OVERLAY_IMAGE value is true"
-	mount_overlay_rootfs
+if [[ "$ENABLE_OVERLAY_FOR_ROOTFS" == "true" ]]; then
+	echo "ENABLE_OVERLAY_FOR_ROOTFS value is true"
+	mount_overlay_rootfs || { echo "Failed to mount rootfs as overlay, falling back to wz_mini mounting" ; mount_wz_mini ; }
 else
-	echo "ENABLE_OVERLAY_IMAGE value is false"
+	echo "ENABLE_OVERLAY_FOR_ROOTFS value is false"
 	mount_wz_mini
 fi
 
