@@ -14,19 +14,20 @@ WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE=/sdcard/wz_mini/overlay_empty.img.gz
 WZMINI_KERNEL_MODULE_PATH=/sdcard/wz_mini/lib/modules/3.10.14__isvp_swan_1.0__
 
 
-
+##### MOUNTING VIRTUAL FILE SYSTEMS  #####
 # devtmpfs does not get automounted for initramfs
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 
+
+##### INITIALIZING GPIO #####
 # Required delay on T20/T31
 sleep 1
 
 echo "Check for T20 platform"
 
 if [ -b /dev/mtdblock10 ]; then
-
 	echo "Found T20"
 
 	# T20: Need to export the sd card enable gpio manually
@@ -35,7 +36,6 @@ if [ -b /dev/mtdblock10 ]; then
 
 	# T20: Insert required delay for sd card init
 	sleep 3
-
 else
 	echo "Not T20"
 fi
@@ -52,6 +52,8 @@ if ! [ -d /sys/class/gpio/gpio39 ]; then
 	echo 1 > /sys/class/gpio/gpio39/value
 fi
 
+
+##### MOUNTING SD CARD AND STOCK ROOTFS #####
 mkdir /sdcard
 mkdir /sdcard2 # Create this temporary directory to store log file on SD card regardless of where it is mounted before switching root
 mkdir /rom
@@ -60,6 +62,7 @@ mount -t squashfs /dev/mtdblock2 /rom
 mount -t vfat /dev/mmcblk0p1 /sdcard -o rw,umask=0000,dmask=0000
 mount -t vfat /dev/mmcblk0p1 /sdcard2 -o rw,umask=0000,dmask=0000
 cp /sdcard/wz_mini/bin/busybox /tmp/busybox
+
 
 fsck_sdcard() {
 	echo "Running fsck on SD Card"
@@ -179,7 +182,7 @@ if ! [ -f $WZMINI_INIT_FILE ]; then
 fi
 
 
-##### MOUNTING #####
+##### MOUNTING NEWROOT #####
 if [[ "$ENABLE_OVERLAY_FOR_ROOTFS" == "true" ]]; then
 	echo "ENABLE_OVERLAY_FOR_ROOTFS value is true"
 	mount_overlay_rootfs || { echo "Failed to mount rootfs as overlay, falling back to wz_mini mounting" ; mount_wz_mini ; }
