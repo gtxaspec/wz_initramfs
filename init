@@ -53,7 +53,7 @@ if ! [ -d /sys/class/gpio/gpio39 ]; then
 fi
 
 mkdir /sdcard
-mkdir /sdcard2
+mkdir /sdcard2 # Create this temporary directory to store log file on SD card regardless of where it is mounted before switching root
 mkdir /rom
 mkdir /newroot
 mount -t squashfs /dev/mtdblock2 /rom
