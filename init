@@ -178,6 +178,7 @@ if ! [ -f $WZMINI_INIT_FILE ]; then
 	boot_stock
 fi
 
+
 ##### MOUNTING #####
 if [[ "$ENABLE_OVERLAY_FOR_ROOTFS" == "true" ]]; then
 	echo "ENABLE_OVERLAY_FOR_ROOTFS value is true"
