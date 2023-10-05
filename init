@@ -110,36 +110,36 @@ mount_wz_mini() {
 
 mount_overlay_rootfs() { # Mount rootfs as overlay
 	if ! grep -q "overlayfs" /proc/filesystems; then
-		echo "overlayfs support is missing from this kernel"
-		return 1
+		{ echo "overlayfs support is missing from this kernel" ; return 1 ; }
 	fi
 
 	if ! [ -f $WZMINI_OVERLAY_FILE ]; then
 		echo "$WZMINI_OVERLAY_FILE is missing"
-		# Create overlay image from compressed empty overlay image file
 		if [[ -f $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE ]]; then
-		echo "Decompressing $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE"
+			echo "Decompressing $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE" # Create overlay image from compressed empty overlay image file
 			/tmp/busybox gzip -d -k -c $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE > $WZMINI_OVERLAY_FILE || { echo "Failed to decompress $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE" ; return 1 ; }
 		else
 			{ echo "$WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE is missing" ; return 1 ; }
 		fi
 	fi
 
-	echo "Mounting rootfs as overlay"
+	echo "Loading ext4 kernel module before mounting overlay image"
 	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/jbd2/jbd2.ko
 	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/mbcache.ko
 	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/ext4/ext4.ko
 
+	echo "Mounting overlay image"
 	mkdir /overlay
 	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /overlay || { echo "Failed to mount $WZMINI_OVERLAY_FILE" ; return 1 ; }
 
+	echo "Mounting rootfs as overlay"
 	mount -t overlayfs overlayfs -o lowerdir=/rom,upperdir=/overlay /newroot
 
+	mounting "SD Card to /sdcard and wz_mini directory to /opt/wz_mini"  This lets /opt have file permissions support
 	mkdir -p /newroot/sdcard
 	mkdir -p /newroot/opt/wz_mini
 	mkdir -p /opt/wz_mini
-
-	mount --bind /sdcard/wz_mini /opt/wz_mini # Mount (sdcard) to /sdcard and (sdcard)/wz_mini to /opt/wz_mini to let /opt have file permissions support
+	mount --bind /sdcard/wz_mini /opt/wz_mini
 	mount --move /opt/wz_mini /newroot/opt/wz_mini
 	mount --move /sdcard /newroot/sdcard
 
