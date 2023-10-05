@@ -135,7 +135,7 @@ mount_overlay_rootfs() { # Mount rootfs as overlay
 	echo "Mounting rootfs as overlay"
 	mount -t overlayfs overlayfs -o lowerdir=/rom,upperdir=/overlay /newroot
 
-	mounting "SD Card to /sdcard and wz_mini directory to /opt/wz_mini"  This lets /opt have file permissions support
+	echo "Mounting SD Card to /sdcard and wz_mini directory to /opt/wz_mini"  This lets /opt have file permissions support
 	mkdir -p /newroot/sdcard
 	mkdir -p /newroot/opt/wz_mini
 	mkdir -p /opt/wz_mini
