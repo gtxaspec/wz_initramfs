@@ -115,7 +115,7 @@ mount_overlay_rootfs() { # Mount rootfs as overlay
 
 	if ! [ -f $WZMINI_OVERLAY_FILE ]; then
 		echo "$WZMINI_OVERLAY_FILE is missing"
-		if [[ -f $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE ]]; then
+		if [ -f $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE ]; then
 			echo "Decompressing $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE to create overlay image"
 			/tmp/busybox gzip -d -k -c $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE > $WZMINI_OVERLAY_FILE || { echo "Failed to decompress $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE" ; return 1 ; }
 		else
