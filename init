@@ -116,7 +116,7 @@ mount_overlay_rootfs() { # Mount rootfs as overlay
 	if ! [ -f $WZMINI_OVERLAY_FILE ]; then
 		echo "$WZMINI_OVERLAY_FILE is missing"
 		if [[ -f $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE ]]; then
-			echo "Decompressing $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE" # Create overlay image from compressed empty overlay image file
+			echo "Decompressing $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE to create overlay image"
 			/tmp/busybox gzip -d -k -c $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE > $WZMINI_OVERLAY_FILE || { echo "Failed to decompress $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE" ; return 1 ; }
 		else
 			{ echo "$WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE is missing" ; return 1 ; }
@@ -135,7 +135,7 @@ mount_overlay_rootfs() { # Mount rootfs as overlay
 	echo "Mounting rootfs as overlay"
 	mount -t overlayfs overlayfs -o lowerdir=/rom,upperdir=/overlay /newroot
 
-	echo "Mounting SD Card to /sdcard and wz_mini directory to /opt/wz_mini"  This lets /opt have file permissions support
+	echo "Mounting SD Card to /sdcard and wz_mini directory to /opt/wz_mini, this lets /opt have file permissions support"
 	mkdir -p /newroot/sdcard
 	mkdir -p /newroot/opt/wz_mini
 	mkdir -p /opt/wz_mini
