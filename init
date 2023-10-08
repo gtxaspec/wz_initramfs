@@ -158,7 +158,7 @@ if ! [ -f $WZMINI_CONFIG_FILE ]; then
 fi
 
 /tmp/busybox dos2unix $WZMINI_CONFIG_FILE
-source $WZMINI_CONFIG_FILE
+source $WZMINI_CONFIG_FILE || { echo "$WZMINI_CONFIG_FILE is invalid, falling back to stock firmware" ; boot_stock ; }
 
 if [ "$DEBUG_INITRAMFS_ENABLED" == "true" ]; then
 	echo "DEBUG_INITRAMFS_ENABLED value is true"
