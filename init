@@ -1,32 +1,41 @@
 #!/bin/sh
+## wz_mini initramfs init
 
 exec 1> /tmp/wz_mini_initramfs.log 2>&1
 
 set -x
 
-echo "welcome to wz_mini initramfs"
+echo "Welcome to wz_mini initramfs"
+WZMINI_CONFIG_FILE=/sdcard/wz_mini/wz_mini.conf
+WZMINI_INIT_FILE=/sdcard/wz_mini/etc/init.d/wz_init.sh
+WZMINI_INIT_FILE_NEWROOT=/opt/wz_mini/etc/init.d/wz_init.sh
+WZMINI_OVERLAY_FILE=/sdcard/wz_mini-overlay.img
+WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE=/sdcard/wz_mini/overlay_empty.img.gz
+WZMINI_KERNEL_MODULE_PATH=/sdcard/wz_mini/lib/modules/3.10.14__isvp_swan_1.0__
 
+
+##### MOUNTING VIRTUAL FILE SYSTEMS  #####
 # devtmpfs does not get automounted for initramfs
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 
-#Required delay on T20/T31
+
+##### INITIALIZING GPIO #####
+# Required delay on T20/T31
 sleep 1
 
 echo "Check for T20 platform"
 
 if [ -b /dev/mtdblock10 ]; then
-
 	echo "Found T20"
 
-	#T20: Need to export the sd card enable gpio manually
+	# T20: Need to export the sd card enable gpio manually
 	echo 43 > /sys/class/gpio/export
 	echo in > /sys/class/gpio/gpio43/direction
 
-	#T20: Insert required delay for sd card init
+	# T20: Insert required delay for sd card init
 	sleep 3
-
 else
 	echo "Not T20"
 fi
@@ -43,20 +52,20 @@ if ! [ -d /sys/class/gpio/gpio39 ]; then
 	echo 1 > /sys/class/gpio/gpio39/value
 fi
 
-mkdir -p /sdcard
+
+##### MOUNTING SD CARD AND STOCK ROOTFS #####
+mkdir /sdcard
+mkdir /sdcard2 # Create this temporary directory to store log file on SD card regardless of where it is mounted before switching root
+mkdir /rom
+mkdir /newroot
+mount -t squashfs /dev/mtdblock2 /rom
 mount -t vfat /dev/mmcblk0p1 /sdcard -o rw,umask=0000,dmask=0000
-
-if [ -f /sdcard/wz_mini/wz_mini.conf ]; then
-        source /sdcard/wz_mini/wz_mini.conf
-fi
+mount -t vfat /dev/mmcblk0p1 /sdcard2 -o rw,umask=0000,dmask=0000
+cp /sdcard/wz_mini/bin/busybox /tmp/busybox
 
 
-initram_init() {
-
-mkdir /wz
-mount -t squashfs /dev/mtdblock2 /wz
-
-if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
+fsck_sdcard() {
+	echo "Running fsck on SD Card"
 	/led.sh &
 	led_pid="$!"
 	cp /sdcard/wz_mini/bin/fsck.vfat /tmp/fsck.vfat
@@ -68,56 +77,120 @@ if [[ "$ENABLE_FSCK_ON_BOOT" == "true" ]]; then
 	kill $led_pid
 	echo 1 > /sys/class/gpio/gpio39/value
 	echo 0 > /sys/class/gpio/gpio38/value
-fi
-
-if [ ! -f /sdcard/wz_mini/etc/init.d/wz_init.sh ]; then
-
-	echo "wz_mini not found, booting stock"
-
-	mount --move /dev /wz/dev
-	mount --move /sys /wz/sys
-	mount --move /proc /wz/proc
-
-	cp /tmp/wz_mini_initramfs.log /sdcard/wz_mini_initramfs.log
-
-	umount /sdcard
-
-	exec busybox switch_root /wz /linuxrc
-
-else
-
-	echo "Loading wz_mini..."
-
-	mkdir -p /wz/dev
-	mkdir -p /wz/sys
-
-
-	mount --move /dev /wz/dev
-	mount --move /sys /wz/sys
-	mount --move /proc /wz/proc
-
-	#mkdir -p /wz/media/mmc
-	mount --move /sdcard /wz/opt
-
-	cp /tmp/wz_mini_initramfs.log /wz/opt/wz_mini_initramfs.log
-
-	#exec busybox switch_root /wz /linuxrc
-	exec busybox switch_root /wz /opt/wz_mini/etc/init.d/wz_init.sh
-
-fi
-
 }
 
-if [ -f /sdcard/wz_mini/wz_mini.conf ]; then
+move_virtual_filesystems() { # Move virtual file systems to new root
+	echo "Moving /dev, /sys, /proc to /newroot"
+	mount --move /dev /newroot/dev
+	mount --move /sys /newroot/sys
+	mount --move /proc /newroot/proc
+}
 
-	source /sdcard/wz_mini/wz_mini.conf
+boot_stock() {
+	mount --move /rom /newroot
+	move_virtual_filesystems
+	echo "Switching root to /newroot with stock init"
+	cp /tmp/wz_mini_initramfs.log /sdcard2/wz_mini_initramfs.log
+	umount /sdcard2
+	exec busybox switch_root /newroot /linuxrc
+}
 
-	if [[ "$DEBUG_INITRAMFS_ENABLED" == "true" ]]; then
-		exec /bin/sh
-	else
-		echo "initramfs debug disabled"
-		initram_init
+boot_wz_mini() {
+	move_virtual_filesystems
+	echo "Switching root to /newroot with wz_mini init"
+	cp /tmp/wz_mini_initramfs.log /sdcard2/wz_mini_initramfs.log
+	umount /sdcard2
+	exec busybox switch_root /newroot $WZMINI_INIT_FILE_NEWROOT
+}
+
+mount_wz_mini() {
+	mount --move /rom /newroot
+	mount --move /sdcard /newroot/opt
+}
+
+mount_overlay_rootfs() { # Mount rootfs as overlay
+	if ! grep -q "overlayfs" /proc/filesystems; then
+		{ echo "overlayfs support is missing from this kernel" ; return 1 ; }
 	fi
-else
-		initram_init
+
+	if ! [ -f $WZMINI_OVERLAY_FILE ]; then
+		echo "$WZMINI_OVERLAY_FILE is missing"	
+		if [ -f $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE ]; then
+			echo "Decompressing $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE to create overlay image"
+			/tmp/busybox gzip -d -k -c $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE > $WZMINI_OVERLAY_FILE || { echo "Failed to decompress $WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE" ; return 1 ; }
+		else
+			{ echo "$WZMINI_OVERLAY_EMPTY_COMPRESSED_FILE is missing" ; return 1 ; }
+		fi
+	fi
+
+	echo "Loading ext4 kernel module before mounting overlay image"
+	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/jbd2/jbd2.ko
+	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/mbcache.ko
+	busybox insmod $WZMINI_KERNEL_MODULE_PATH/kernel/fs/ext4/ext4.ko
+
+	echo "Mounting overlay image"
+	mkdir /overlay
+	mount $WZMINI_OVERLAY_FILE -o loop -t ext2 /overlay || { echo "Failed to mount $WZMINI_OVERLAY_FILE" ; return 1 ; }
+
+	echo "Mounting rootfs as overlay"
+	mount -t overlayfs overlayfs -o lowerdir=/rom,upperdir=/overlay /newroot
+
+	echo "Mounting SD Card to /sdcard and wz_mini directory to /opt/wz_mini, this lets /opt have file permissions support"
+	mkdir -p /newroot/sdcard
+	mkdir -p /newroot/opt/wz_mini
+	mkdir -p /opt/wz_mini
+	mount --bind /sdcard/wz_mini /opt/wz_mini
+	mount --move /opt/wz_mini /newroot/opt/wz_mini
+	mount --move /sdcard /newroot/sdcard
+
+	mkdir -p /newroot/rom
+	mkdir -p /newroot/overlay
+	mount --move /rom /newroot/rom
+	mount --move /overlay /newroot/overlay
+}
+
+
+
+##### ERROR CHECKING AND DEBUGGING #####
+if ! [ -f $WZMINI_CONFIG_FILE ]; then
+	echo "$WZMINI_CONFIG_FILE is missing, falling back to stock firmware"
+	boot_stock
 fi
+
+/tmp/busybox dos2unix $WZMINI_CONFIG_FILE
+source $WZMINI_CONFIG_FILE || { echo "$WZMINI_CONFIG_FILE is invalid, falling back to stock firmware" ; boot_stock ; }
+
+if [ "$DEBUG_INITRAMFS_ENABLED" == "true" ]; then
+	echo "DEBUG_INITRAMFS_ENABLED value is true"
+	echo "Starting initramfs debug mode"
+	exec &>/dev/ttyS1
+	exec /bin/sh
+else
+	echo "DEBUG_INITRAMFS_ENABLED value is false"
+fi
+
+if [ "$ENABLE_FSCK_ON_BOOT" == "true" ]; then
+	echo "ENABLE_FSCK_ON_BOOT value is true"
+	fsck_sdcard
+else
+	echo "ENABLE_FSCK_ON_BOOT value is false"
+fi
+
+if ! [ -f $WZMINI_INIT_FILE ]; then
+	echo "$WZMINI_INIT_FILE is missing, falling back to stock firmware"
+	boot_stock
+fi
+
+
+##### MOUNTING NEWROOT #####
+if [ "$ENABLE_OVERLAY_FOR_ROOTFS" == "true" ]; then
+	echo "ENABLE_OVERLAY_FOR_ROOTFS value is true"
+	mount_overlay_rootfs || { echo "Failed to mount rootfs as overlay, falling back to wz_mini mounting" ; mount_wz_mini ; }
+else
+	echo "ENABLE_OVERLAY_FOR_ROOTFS value is false"
+	mount_wz_mini
+fi
+
+
+##### BOOTING #####
+boot_wz_mini
